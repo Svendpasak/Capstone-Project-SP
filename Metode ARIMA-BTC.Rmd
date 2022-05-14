@@ -1,0 +1,172 @@
+---
+title: "ARIMA-Bitcoin"
+author: "Svend Pasak"
+date: "12/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(tidyverse) 
+library(lubridate) # date manipulation
+library(forecast) # time series library
+library(TTR) # for Simple moving average function
+library(MLmetrics) # calculate error
+library(tseries) # adf.test
+library(fpp) # usconsumtion
+library(TSstudio) # mempercantik visualisasi timeseries
+library(padr)
+library(zoo)
+
+```
+#Read Data 
+```{r}
+BTC <-  read.csv("D:\\KULIAH BINUS-SMT 3\\Data Thesis-Crypto\\BTC-USD.csv")
+BTC
+```
+
+```{r}
+BTC <- read.csv("D:\\KULIAH BINUS-SMT 3\\Data Thesis-Crypto\\BTC-USD.csv")
+tail(BTC)
+```
+
+
+#Lihat Struktur Data
+```{r}
+str(BTC)
+```
+#Cek Missing Value
+```{r}
+anyNA(BTC)
+```
+#Menghilangkan Kolom yang tidak diperlukan dan mengubah tipe Data kolom "Date" dan "Close"
+```{r}
+BTC <- BTC %>%
+  select(-c(Open,
+            High,
+            Low,
+            Adj.Close,
+            Volume)) %>% 
+  mutate(Date=ymd(Date),
+         Close=as.numeric(Close))
+head(BTC)
+```
+#Menghilangkan missing Value (terdapat 4 baris missing values)
+
+```{r}
+BTC <- na.omit(BTC)
+```
+
+#Exploratory data
+```{r}
+BTC %>% 
+  ggplot(aes(Date, Close)) +
+  geom_point() +
+  geom_line() +
+  labs(y = "BTC Closing Price") +
+  theme_minimal()
+
+plotly::ggplotly()
+```
+#Mengubah Data menjadi Data Time Series (ts)
+#Untuk membuat sebuah object time series pada R kita bisa menggunakan function `ts()` dengan parameter yang diperlukan yaitu :"ts(data, start, frequency)"
+
+* `data`  = data yang akan diprediksi
+* `start` = waktu awal mula data yang akan diprediksi
+* `frequency` = pola berulang dari data (pola harian)
+
+```{r}
+BTC_ts <- ts(data.frame(BTC$Close), 
+  start = c(2017,08), end = c(2021,06),
+  frequency = 24)
+```
+
+```{r}
+BTC_ts %>% 
+  autoplot() +
+  geom_point() +
+  labs(y = "BTC Closing Price ") +
+  theme_minimal()
+plotly::ggplotly()
+```
+
+
+
+```{r}
+library(ggplot2)
+```
+#Decompose
+
+```{r}
+BTC_dc <- BTC_ts %>% 
+  decompose(type = "additive") %>% 
+  autoplot()
+BTC_dc
+```
+
+#adf Test
+```{r}
+adf.test(BTC_ts)
+```
+
+#Melakukan 1 x Differencing dengan data BTC_ts
+```{r}
+BTC_diff <- diff(BTC_ts)
+```
+
+#Mengecek 
+```{r}
+adf.test(BTC_diff)
+```
+#Kesimpulan:
+Data sudah stationer ketika dilakukan differencing 1x
+
+* Bandingkan plot tanpa differencing dan dengan differencing 1x
+```{r}
+BTC_ts %>% 
+  autoplot()
+BTC_diff %>% 
+  autoplot()
+```
+#ARIMA(p,d,q) = AR(p) I(d) MA(q)
+
+diff adalah bagian order untuk d-nya
+
+ARIMA(p,1,q)
+
+#Fitting model (using Auto Arima)
+
+```{r}
+BTC_auto <- auto.arima(BTC_ts, seasonal = FALSE, allowdrift = FALSE)
+BTC_auto
+summary(BTC_auto)
+```
+#Menggunakan Model ARIMA secara Manual
+Langkah 1: Tentukan `d`
+
+Langkah 2: Tentukan `p dan q`
+
+- AR(p) -> perhatikan PACF(Partial Auto Correlation Function) cuts off di lag berapa
+- MA(q) -> perhatikan ACF(Auto Correlation Function) cuts off di lag berapa
+- Dies down/decay: mengalami penurunan atau kenaikan secara lambat
+- cuts off lag: mengalami penurunan atau kenaikan secara cepat
+
+```{r}
+tsdisplay(BTC_diff)
+```
+#Melihat hasil diatas, maka cuts off lag tidak ada terjadi. sehingga boleh dikatakan model Arima pada objek Bitcoin (BTC) adalah (0,1,0) merupakan yang terbaik dengan nilai MAPE 3,429
+
+
+
+
+
+
